@@ -1,13 +1,12 @@
 # Kubernetes
 
-Build the image:
+Build a local image:
 
 ```powershell
 .\mvnw.cmd clean package
 docker build -t login-service:0.0.1 .
 ```
 
-Build the image from Git, using the Dockerfile default branch:
 Build the image directly from the current repository checkout:
 
 ```powershell
@@ -28,12 +27,21 @@ ghcr.io/shriramgokhalemalya/login-service:<release-tag>
 ghcr.io/shriramgokhalemalya/login-service:latest
 ```
 
-To deploy a released image, update `k8s/deployment.yaml`:
+The Kubernetes deployment pulls the release image from GitHub Container Registry:
 
 ```yaml
 image: ghcr.io/shriramgokhalemalya/login-service:v0.0.1
 imagePullPolicy: Always
 ```
+
+For now, `k8s/deployment.yaml` uses:
+
+```yaml
+image: ghcr.io/shriramgokhalemalya/login-service:latest
+imagePullPolicy: Always
+```
+
+This makes Kubernetes pull the latest release image each time the deployment is restarted or recreated.
 
 Deploy to Docker Desktop Kubernetes:
 

@@ -17,8 +17,8 @@ spec:
     spec:
       containers:
         - name: login-service
-          image: login-service:0.0.1
-          imagePullPolicy: IfNotPresent
+          image: ghcr.io/shriramgokhalemalya/login-service:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
           env:
