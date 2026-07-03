@@ -1,66 +1,104 @@
-# Kubernetes
+# Kubernetes Deployment
 
-Build a local image:
+This service is deployed to Docker Desktop Kubernetes using an image published to GitHub Container Registry.
 
-```powershell
-.\mvnw.cmd clean package
-docker build -t login-service:0.0.1 .
-```
+## Release Image Flow
 
-Build the image directly from the current repository checkout:
-
-```powershell
-docker build -t login-service:git-build .
-```
-
-GitHub Actions release image flow:
-
-- Create and publish a GitHub Release.
-- GitHub checks out the release source.
-- The workflow builds the image from that checked-out source.
-- The image is pushed to GitHub Container Registry.
-
-Published image tags:
+Create a GitHub Release. The GitHub Actions workflow builds the Docker image and pushes:
 
 ```text
 ghcr.io/shriramgokhalemalya/login-service:<release-tag>
 ghcr.io/shriramgokhalemalya/login-service:latest
 ```
 
-The Kubernetes deployment pulls the release image from GitHub Container Registry:
+Example release command from Command Prompt:
 
-```yaml
-image: ghcr.io/shriramgokhalemalya/login-service:v0.0.1
-imagePullPolicy: Always
+```cmd
+gh release create v0.0.1 --title "v0.0.1" --notes "Initial login-service release with JWT, Docker, GHCR, and Kubernetes support"
 ```
 
-For now, `k8s/deployment.yaml` uses:
+Example release command from PowerShell:
+
+```powershell
+gh release create v0.0.1 `
+  --title "v0.0.1" `
+  --notes "Initial login-service release with JWT, Docker, GHCR, and Kubernetes support"
+```
+
+## Current Deployment Image
+
+`deployment.yaml` currently pulls the `latest` image from GHCR:
 
 ```yaml
 image: ghcr.io/shriramgokhalemalya/login-service:latest
 imagePullPolicy: Always
 ```
 
-This makes Kubernetes pull the latest release image each time the deployment is restarted or recreated.
+This means Kubernetes pulls the latest release image whenever the deployment is restarted or recreated.
 
-Deploy to Docker Desktop Kubernetes:
+## Deploy To Kubernetes
+
+Apply the manifests:
 
 ```powershell
-kubectl apply -f k8s/
+kubectl apply -f k8s
+```
+
+Restart the deployment so it pulls `latest`:
+
+```powershell
+kubectl rollout restart deployment/login-service -n performance-lab
+```
+
+Wait for rollout:
+
+```powershell
 kubectl rollout status deployment/login-service -n performance-lab
 ```
 
-Test locally with port forwarding:
+Check resources:
+
+```powershell
+kubectl get pods,svc -n performance-lab
+```
+
+## Test Locally
+
+Port-forward the service:
 
 ```powershell
 kubectl port-forward service/login-service 8080:8080 -n performance-lab
 ```
 
-Then call:
+Login:
 
 ```powershell
-Invoke-RestMethod -Method Post `
+$login = Invoke-RestMethod -Method Post `
   -Uri http://localhost:8080/api/auth/login `
   -ContentType "application/json" `
   -Body '{"username":"admin","password":"password"}'
+```
+
+Call the protected endpoint:
+
+```powershell
+Invoke-RestMethod -Method Get `
+  -Uri http://localhost:8080/api/users/me `
+  -Headers @{ Authorization = "Bearer $($login.token)" }
+```
+
+Expected response:
+
+```json
+{
+  "username": "admin"
+}
+```
+
+## Local Docker Build
+
+For local testing without GHCR:
+
+```powershell
+docker build -t login-service:local .
 ```
