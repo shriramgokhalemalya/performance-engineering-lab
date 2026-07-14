@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: login-service
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - performance-lab
+
+  selector:
+    matchLabels:
+      app: login-service
+
+  endpoints:
+    - port: http
+      path: /actuator/prometheus
+      interval: 15s

@@ -34,6 +34,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
         String authorizationHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
+        String requestUri = request.getRequestURI();
+
+        if (requestUri.startsWith("/allocate") || requestUri.startsWith("/api/auth/allocate")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         if (authorizationHeader == null || !authorizationHeader.startsWith(BEARER_PREFIX)) {
             filterChain.doFilter(request, response);

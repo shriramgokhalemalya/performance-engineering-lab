@@ -14,6 +14,8 @@ ghcr.io/shriramgokhalemalya/login-service:latest
 Example release command from Command Prompt:
 
 ```cmd
+git tag v0.0.1
+git push origin v0.0.1
 gh release create v0.0.1 --title "v0.0.1" --notes "Initial login-service release with JWT, Docker, GHCR, and Kubernetes support"
 ```
 
@@ -102,3 +104,64 @@ For local testing without GHCR:
 ```powershell
 docker build -t login-service:local .
 ```
+
+
+# Kind Kubernetes Cluster Setup (v0.0.2+)
+
+## Create Cluster
+```powershell
+kind create cluster --name performance-lab --config cluster/kind-config.yaml
+```
+
+## Install Metrics Server
+```powershell
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml 
+```
+Add `--kubelet-insecure-tls` to the metrics-server deployment when using Kind.
+
+## Install NGINX Ingress
+```powershell
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+kubectl get pods -n ingress-nginx
+kubectl get svc -n ingress-nginx
+kubectl get ingressclass
+```
+
+## Deploy
+```powershell
+kubectl apply -f k8s
+kubectl get all -n performance-lab
+kubectl get endpoints -n performance-lab
+```
+
+## Ingress
+```powershell
+kubectl apply -f k8s/ingress.yaml
+kubectl get ingress -n performance-lab
+kubectl describe ingress login-ingress -n performance-lab
+```
+
+## Troubleshooting
+```powershell
+kubectl logs -n ingress-nginx deployment/ingress-nginx-controller
+kubectl port-forward service/ingress-nginx-controller 8081:80 -n ingress-nginx
+kubectl port-forward service/login-service 8080:8080 -n performance-lab
+kubectl get pods -n ingress-nginx -o wide
+kubectl get nodes
+kubectl top nodes
+kubectl top pods -A
+docker ps
+```
+
+## Scaling the pods
+
+```powershell
+kubectl scale deployment login-service --replicas=10 -n performance-lab
+kubectl top pods -n performance-lab
+kubectl get pods -n performance-lab
+```
+
+## URLs
+- http://localhost:8080/
+- http://localhost:8080/actuator/health
+- Debug: http://localhost:8081/

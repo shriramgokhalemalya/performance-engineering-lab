@@ -97,19 +97,26 @@ Dependencies
 
 com.perflab.login
 
+**Implemented:**
+
 ```
-config
-constant
-controller
-dto
-exception
-lab
-metrics
-model
-security
-service
-util
-validator
+controller     - AuthController, UserController
+dto            - LoginRequest, LoginResponse
+security       - SecurityConfig, JwtService, JwtAuthenticationFilter
+service        - AuthService
+```
+
+**Planned for Future Sprints:**
+
+```
+config         - Configuration beans (Sprint 5+)
+constant       - Application constants
+exception      - Custom exception handlers
+lab            - Performance lab endpoints for generating CPU/memory/thread issues (Sprint 8)
+metrics        - Custom metrics and monitoring (Sprint 6)
+model          - Domain entities and models
+util           - Utility classes and helpers
+validator      - Input validation logic
 ```
 
 ---
@@ -232,6 +239,48 @@ Implemented SecurityConfig:
 
 ---
 
+## JWT Implementation Details
+
+**Token Generation (JwtService.generateToken):**
+
+- Uses JJWT library (v0.12.6) with HMAC-SHA algorithm
+- Signing key derived from secret: `Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8))`
+- Token claims:
+  - `subject`: Username extracted from login request
+  - `issuedAt`: Current timestamp
+  - `expiration`: Current timestamp + configurable expiration seconds (default 3600)
+- Token format: Compact JWS (JSON Web Signature)
+
+**Token Validation (JwtService.extractUsername):**
+
+- Parses and verifies token signature using the same signing key
+- Extracts subject claim (username) from verified token
+- Throws `JwtException` if token is expired or signature is invalid
+
+**JWT Filter (JwtAuthenticationFilter):**
+
+- Intercepts all requests via `OncePerRequestFilter`
+- Extracts JWT from `Authorization: Bearer <token>` header
+- On valid token:
+  - Extracts username via `JwtService.extractUsername()`
+  - Creates `UsernamePasswordAuthenticationToken` with username as principal
+  - Assigns `ROLE_USER` authority
+  - Sets authentication in Spring Security context
+- On invalid/expired token:
+  - Clears security context
+  - Sends HTTP 401 with message: "Invalid or expired token"
+
+---
+
+## Authentication Model
+
+- **Principal:** Username extracted from JWT subject claim
+- **Authorities:** Fixed `ROLE_USER` granted to all authenticated users
+- **No password storage:** Authentication is stateless; password only validated during login to generate token
+- **UserDetails:** Not used; empty `InMemoryUserDetailsManager` prevents Spring from generating default credentials
+
+---
+
 # Docker Configuration
 
 Dockerfile:
@@ -350,6 +399,104 @@ permissions:
   packages: write
 ```
 
+---
+
+# Architecture Summary for AI Discussion
+
+## System Purpose
+
+This repository is a learning-focused Spring Boot microservice designed to demonstrate how a Java application can be built, containerized, deployed to Kubernetes, and observed under load. It is intentionally simple and not meant to be a production-grade authentication system.
+
+## Core Architecture
+
+- Client requests hit the Spring Boot application over HTTP.
+- The application exposes public authentication endpoints for login and protected endpoints for authenticated users.
+- Spring Security handles request filtering, JWT validation, and authorization.
+- The service is stateless: authentication is performed with JWTs rather than server-side sessions.
+- Actuator endpoints provide health and metrics endpoints for monitoring.
+
+## Main Technology Stack
+
+- Java 17
+- Spring Boot 3.5.16
+- Maven
+- Docker
+- Kubernetes (Docker Desktop Kubernetes)
+- Prometheus and Grafana for observability
+- JMeter and k6 for load testing
+
+## Runtime Flow
+
+1. A client calls POST /api/auth/login with username and password.
+2. The service validates credentials and generates a JWT.
+3. The client sends the JWT in the Authorization header to protected endpoints.
+4. Spring Security validates the token before allowing access.
+5. The service exposes /actuator/health and Prometheus metrics for monitoring.
+
+## Docker and Containerization
+
+- The application is packaged as a runnable JAR.
+- The Dockerfile uses a multi-stage build:
+  - Maven build stage
+  - Lightweight Java runtime stage
+- The final container exposes port 8080 and runs the Spring Boot application.
+- The image is intended to be built locally and optionally published to GitHub Container Registry.
+
+## Kubernetes Deployment Model
+
+- Namespace: performance-lab
+- Deployment: login-service
+- Replica count: 10
+- Service: ClusterIP exposing port 8080
+- Ingress: nginx-based ingress routing traffic to the service
+- Secret: stores the JWT signing secret
+- Probes: readiness and liveness check the actuator health endpoint
+- Resources: CPU and memory requests/limits are defined for learning and scaling experiments
+
+## Operational Workflow
+
+### Local development
+
+```bash
+mvn clean test
+mvn spring-boot:run
+```
+
+### Docker build and run
+
+```bash
+docker build -t login-service:local .
+docker run -p 8080:8080 login-service:local
+```
+
+### Kubernetes deployment
+
+```bash
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/secret.yaml
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/service.yaml
+kubectl apply -f k8s/ingress.yaml
+```
+
+## Why This Architecture Is Useful for Learning
+
+This project is a good reference for discussing:
+
+- Spring Boot application structure
+- Security implementation with JWT
+- Containerization with Docker
+- Kubernetes deployment and service discovery
+- Monitoring and performance engineering workflows
+- How to gradually evolve a simple app into a cloud-native lab environment
+
+## Suggested Summary for AI Platforms
+
+A simple way to describe this system is:
+
+> A Java Spring Boot authentication service built for learning and performance engineering, packaged in Docker, deployed to Kubernetes, and instrumented with health checks and metrics for observability and load testing.
+
+
 Current approach:
 
 - Kubernetes pulls `latest` for now.
@@ -416,12 +563,27 @@ name: login-service-secret
 key: JWT_SECRET
 ```
 
-Application properties support environment overrides:
+Application properties configuration:
 
 ```properties
+spring.application.name=login-service
+
+# Logging: DEBUG level for Spring Security to trace authentication flow
+logging.level.org.springframework.security=DEBUG
+
+# Actuator: Expose health and Prometheus metrics
+management.endpoints.web.exposure.include=health,prometheus
+
+# JWT Configuration: Support environment variable overrides
 jwt.secret=${JWT_SECRET:performance-lab-jwt-secret-key-for-learning-only-2026}
 jwt.expiration-seconds=${JWT_EXPIRATION_SECONDS:3600}
 ```
+
+**Property Details:**
+
+- `jwt.secret`: HMAC signing key for JWT tokens. Override via `JWT_SECRET` environment variable for production deployments.
+- `jwt.expiration-seconds`: Token TTL in seconds. Override via `JWT_EXPIRATION_SECONDS` environment variable.
+- `management.endpoints.web.exposure.include`: Enables `/actuator/health` and `/actuator/prometheus` endpoints (required for Sprint 6 monitoring).
 
 Deploy or update Kubernetes resources:
 
@@ -483,10 +645,65 @@ Expected protected endpoint response:
 }
 ```
 
-Important note:
+Important notes:
 
 - If GHCR package is public, no Kubernetes imagePullSecret is needed.
 - If GHCR package is private, Kubernetes needs an image pull secret for `ghcr.io`.
+
+---
+
+# Monitoring and Metrics (Sprint 6 - Planned)
+
+**Actuator Endpoints - Currently Enabled:**
+
+- `GET /actuator/health` - Returns `{"status":"UP"}` and application health status
+- `GET /actuator/prometheus` - Exposes metrics in Prometheus text format for scraping
+
+**Micrometer Prometheus Registry:**
+
+- Configured via Spring Boot Actuator dependency
+- Automatically collects JVM metrics: heap memory, GC pauses, thread counts, etc.
+- Metrics available at `/actuator/prometheus` for Prometheus scraping
+
+**Future Monitoring Setup (Sprint 6):**
+
+- Prometheus server to scrape `/actuator/prometheus` endpoint
+- Grafana dashboards for visualization
+- JVM-specific dashboards for heap dumps, thread dumps, GC analysis
+
+---
+
+# Testing
+
+**Test Class:**
+
+- `LoginServiceApplicationTests` - Basic integration test for application startup
+- Located in: `src/test/java/com/perflab/login/`
+- Uses Spring Boot Test framework with `@SpringBootTest`
+
+**Test Dependencies:**
+
+- `spring-boot-starter-test` - For `@SpringBootTest`, JUnit, Mockito
+- `spring-security-test` - For security testing utilities
+
+**Run Tests:**
+
+```powershell
+mvn test
+```
+
+**Current Test Coverage:**
+
+- Application context loads successfully
+- Maven package build completes (verified in target/surefire-reports/)
+
+**Future Test Expansion:**
+
+- Unit tests for AuthService with various credential scenarios
+- Unit tests for JwtService token generation and validation
+- Integration tests for login endpoint
+- Integration tests for protected endpoints with valid/invalid tokens
+- Security tests for endpoint authorization
 
 ---
 
