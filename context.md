@@ -233,7 +233,6 @@ Deployment details:
 
 Monitoring manifests:
 - `k8s/monitoring/service-monitor.yaml`
-- `k8s/monitoring/monitoring-ingress.yaml`
 
 Kind cluster config:
 - `cluster/kind-config.yaml`
