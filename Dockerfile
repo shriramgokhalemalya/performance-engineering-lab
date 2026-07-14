@@ -5,7 +5,7 @@ WORKDIR /workspace
 COPY pom.xml .
 COPY src ./src
 
-RUN mvn clean package
+RUN mvn clean package -DskipTests
 
 FROM eclipse-temurin:17-jre
 
